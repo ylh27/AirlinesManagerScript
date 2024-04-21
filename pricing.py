@@ -58,7 +58,7 @@ def refreshPrice(route):
     # check if price can be changed
     try:
         # wait for loading
-        wait = WebDriverWait(driver, 3).until(EC.visibility_of_element_located((By.CSS_SELECTOR, ".amcountdown"))).get_attribute("data-timeremaining")
+        wait = WebDriverWait(driver, 3).until(EC.visibility_of_element_located((By.CSS_PATH, "html body div#largeContainer div#mainContainer div#mainContent div#mainContentLeft div#pageContent div#content div#marketing_linePricing div.secretaryBox div.explanation p span.amcountdown.bold"))).get_attribute("data-timeremaining")
         
         print(f"Timer is still running!\n{int(wait)} seconds left!\nNothing to do here")
         counterSkipped += 1
