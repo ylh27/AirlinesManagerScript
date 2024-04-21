@@ -13,11 +13,11 @@ password = "YOUR PASSWORD"
 
 def elem(id):
     # Wait for the element to be present
-    return WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.ID, id)))
+    return WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, id)))
 
 def findallByClassName(className, regex):
     # Wait for the element to be present
-    rawElem = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.CLASS_NAME, className)))
+    rawElem = WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.CLASS_NAME, className)))
     rawText = str(rawElem.get_attribute("innerHTML"))
     return re.findall(regex, rawText)
 
@@ -43,14 +43,22 @@ def getRoutes():
 
 def refreshPrice(route):
     global counterSkipped
+    global counterRefreshed
 
     print("Working on Route: " + route.split("/")[3])
-    driver.get("https://www.airlines-manager.com" + route)
+    while driver.current_url != "https://www.airlines-manager.com" + route:
+        driver.get("https://www.airlines-manager.com" + route)
+
+    # ensure page is loaded
+    try:
+        WebDriverWait(driver, 3).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#priceSimulation")))
+    except:
+        pass
 
     # check if price can be changed
     try:
         # wait for loading
-        wait = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".amcountdown"))).get_attribute("data-timeremaining")
+        wait = WebDriverWait(driver, 3).until(EC.visibility_of_element_located((By.CSS_SELECTOR, ".amcountdown"))).get_attribute("data-timeremaining")
         
         print(f"Timer is still running!\n{int(wait)} seconds left!\nNothing to do here")
         counterSkipped += 1
@@ -87,13 +95,20 @@ def refreshPrice(route):
     setTextForId("line_priceBus", ideals[1])
     setTextForId("line_priceFirst", ideals[2])
     setTextForId("line_priceCargo", ideals[3])
-
-    elem("line_priceCargo").send_keys(Keys.ENTER)
-    WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".amcountdown"))).get_attribute("data-timeremaining") # wait for timer to show
-
-    global counterRefreshed
-    counterRefreshed += 1
-
+    
+    while 1:
+        try:
+            # wait for timer to show
+            WebDriverWait(driver, 3).until(EC.visibility_of_element_located((By.CSS_SELECTOR, ".amcountdown")))
+            counterRefreshed += 1
+            return
+        except:
+            try:
+                elem("line_priceEco").send_keys(Keys.ENTER)
+            except:
+                pass
+    
+    print("Something went wrong!")
 
 if __name__ == "__main__":
     driver = webdriver.Chrome()
