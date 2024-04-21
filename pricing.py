@@ -1,4 +1,7 @@
 from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from time import sleep
 import re
@@ -9,10 +12,12 @@ username = "YOUR USERNAME"
 password = "YOUR PASSWORD"
 
 def elem(id):
-    return driver.find_element_by_id(id)
+    # Wait for the element to be present
+    return WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.ID, id)))
 
 def findallByClassName(className, regex):
-    rawElem = driver.find_element_by_class_name(className)
+    # Wait for the element to be present
+    rawElem = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.CLASS_NAME, className)))
     rawText = str(rawElem.get_attribute("innerHTML"))
     return re.findall(regex, rawText)
 
@@ -30,7 +35,6 @@ def login():
     if "Free" in driver.title:
         login()
 
-
 def getRoutes():
     print("Getting Routes:")
     routes = findallByClassName("priceTable", "/\w{9}/\w{7}/[0-9]{3,10}")
@@ -38,32 +42,46 @@ def getRoutes():
     return routes
 
 def refreshPrice(route):
+    global counterSkipped
+
     print("Working on Route: " + route.split("/")[3])
-    driver.get("https://tycoon.airlines-manager.com" + route)
+    driver.get("https://www.airlines-manager.com" + route)
 
+    # check if price can be changed
     try:
-        waittime = int(driver.find_element_by_xpath("/html/body/div[3]/div/div[5]/div[2]/div[2]/div/div[2]/div[7]/div[2]/p[2]/span").get_attribute("data-timeremaining"))
-        if waittime > 0:
-            print(f"Timer is still running!\n{waittime} seconds left!\nNothing to do here")
-            global counterSkipped
-            counterSkipped += 1
-            return
+        # wait for loading
+        wait = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".amcountdown"))).get_attribute("data-timeremaining")
+        
+        print(f"Timer is still running!\n{int(wait)} seconds left!\nNothing to do here")
+        counterSkipped += 1
+        return
     except:
         pass
 
-    driver.get("https://tycoon.airlines-manager.com" + route + "?fromPricing=1")
-    try:
-        findallByClassName("box1", "\$[0-9]{1,},?[0-9]{1,3}")
-    except:
-        driver.get("https://tycoon.airlines-manager.com/marketing/internalaudit/line/" + route.split("/")[3] + "?fromPricing=1")
-        pass
+    # perform audit
+    driver.get("https://www.airlines-manager.com/marketing/internalaudit/line/" + route.split("/")[3] + "?fromPricing=1")
 
+    # extract prices
     ideals = []
     for ideal in findallByClassName("box1", "\$[0-9]{1,},?[0-9]{1,3}"):
         if "," in ideal:
             ideals.append(int(ideal.replace("$","").replace(",","")))
         else:
             ideals.append(int(ideal.replace("$","")))
+    print(ideals)
+
+    currents = []
+    for current in findallByClassName("box2", "\$[0-9]{1,},?[0-9]{1,3}"):
+        if "," in current:
+            currents.append(int(current.replace("$","").replace(",","")))
+        else:
+            currents.append(int(current.replace("$","")))
+    print(currents)
+
+    if currents == ideals:
+        print("Prices are already ideal!")
+        counterSkipped += 1
+        return
 
     setTextForId("line_priceEco", ideals[0])
     setTextForId("line_priceBus", ideals[1])
@@ -71,6 +89,7 @@ def refreshPrice(route):
     setTextForId("line_priceCargo", ideals[3])
 
     elem("line_priceCargo").send_keys(Keys.ENTER)
+    WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".amcountdown"))).get_attribute("data-timeremaining") # wait for timer to show
 
     global counterRefreshed
     counterRefreshed += 1
@@ -78,14 +97,35 @@ def refreshPrice(route):
 
 if __name__ == "__main__":
     driver = webdriver.Chrome()
-    driver.get("https://tycoon.airlines-manager.com/marketing/pricing/?airport=0")
-    if "Free" in driver.title:
-        login()
-    if "Price" in driver.title:
+    driver.get("https://www.airlines-manager.com/marketing/pricing/?airport=0")
+
+    login()
+    
+    # wait while loading
+    #while "Airlines Manager 2" in driver.title:
+    #    sleep(1)
+    #print("Logged in!")
+
+    tot = 0
+    page = 1
+    while 1:
+        # retrive routes
+        print()
         routes = getRoutes()
+
+        if len(routes) == 0:
+            print()
+            print("No more routes to refresh!")
+            break
+
+        tot += len(routes)
+        # refresh prices
         for i in range(0, len(routes)):
+            print()
             refreshPrice(routes[i])
             print(f"Refreshed {counterRefreshed} line(s)")
             print(f"Skipped {counterSkipped} line(s)")
-            print(f"Scanned {counterRefreshed + counterSkipped} out of {len(routes)} so far!")
-            print()
+            print(f"Scanned {counterRefreshed + counterSkipped} out of {tot} so far!")    
+
+        page += 1
+        driver.get("https://www.airlines-manager.com/marketing/pricing/?airport=0&page=" + str(page))
